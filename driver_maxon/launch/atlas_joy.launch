@@ -13,7 +13,7 @@
     <!-- <param name="axis_angular" value="0" type="int"/> -->
     <!-- <param name="scale_linear" value="2" type="double"/> -->
     <!-- <param name="scale_angular" value="2" type="double"/> -->
-    <node pkg="driver_maxon"  type="teleop_joy" name="teleop_joy">
+    <node pkg="driver_maxon"  type="teleop_joy" name="teleop_joy" output="screen">
     <!-- <remap from = "atlasmv/cmd_vel" to = "turtle1/cmd_vel"/> -->
     </node>
 

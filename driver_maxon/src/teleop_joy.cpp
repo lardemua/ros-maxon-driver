@@ -4,6 +4,43 @@
 
 #include "mx_des.h"
 
+struct ButtonState
+{
+    bool enable = false;
+    bool stop_motion = false;
+    float speed = 0.0;
+    bool reverse = false;
+    bool reset = false;
+    bool multiplier_increment = false;
+    bool multiplier_decrement = false;
+};
+
+const std::vector<float> multipliers{500, 1000, 1500, 2000, 2500, 3000};
+
+struct CarState
+{
+    bool reversed = false;
+    float speed = 0.0;
+    float multiplier = 0;
+};
+
+ButtonState from_joy(const sensor_msgs::Joy &joy)
+{
+    ButtonState state;
+
+    state.enable = joy.buttons[7] == 1;
+    state.stop_motion = joy.buttons[2] == 1;
+    state.reverse = joy.buttons[1] == 1;
+    state.reset = joy.buttons[6] == 1;
+
+    state.multiplier_increment = joy.buttons[5] == 1;
+    state.multiplier_decrement = joy.buttons[4] == 1;
+
+    state.speed = (((-joy.axes[5] + 1.0) / 2.0));
+
+    return state;
+}
+
 class TeleopAtlasMV
 {
 public:
@@ -18,98 +55,89 @@ private:
     ros::Subscriber joy_sub_;
 
     des_context *mx;
+    ButtonState btn_state;
+    CarState car_state;
 };
 
 TeleopAtlasMV::TeleopAtlasMV() : linear_(1), angular_(3), l_scale_(0.025), a_scale_(0.025)
 {
-    // nh_.param("axis_linear", linear_, linear_);
-    // nh_.param("axis_angular", angular_, angular_);
-    // nh_.param("scale_angular", a_scale_, a_scale_);
-    // nh_.param("scale_linear", l_scale_, l_scale_);
-
-    cmd_pub_ = nh_.advertise<geometry_msgs::Twist>("atlasmv_commands", 1);
-    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopAtlasMV::joyCallback, this);
 
     mx = des_init((char *)"/dev/ttyUSB1", NULL);
     if (!mx)
     {
         throw std::runtime_error("error initializing des");
     }
+
+    des_reset(mx);
+
+    cmd_pub_ = nh_.advertise<geometry_msgs::Twist>("atlasmv_commands", 1);
+    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopAtlasMV::joyCallback, this);
 }
 
 void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
 {
 
-    if (joy->buttons[7] == 1) //command "enable"-->button: START
-    {
+    const ButtonState next_state = from_joy(*joy);
 
-        des_error err = des_enable(mx, true);
-        if (err != DES_OK)
-        {
-            ROS_ERROR("enabling %s", des_strerror(err));
-        }
-        else
-        {
-            ROS_INFO("enabled");
-        }
-    }
-    if (joy->buttons[2] == 1) //commmand "STOP"-->button: X
-    {
-        des_error err = des_stop_motion(mx);
-        if (err != DES_OK)
-        {
-            ROS_ERROR("stopping %s", des_strerror(err));
-        }
-        else
-        {
-            ROS_INFO("motor stopped");
-        }
-    }
-    if (joy->buttons[6] == 1) //command "reset"-->button: BACK
-    {
-        des_error err = des_reset(mx);
-        if (err != DES_OK)
-        {
-            ROS_ERROR("reseting %s", des_strerror(err));
-        }
-        else
-        {
-            ROS_INFO("reset done");
-        }
-    }
-    //command "speed":--->button RT
-    float speed_axes = joy->axes[5];
-    int max_velocity = 2000;
-    short speed = ((-speed_axes + 1.0) / 2.0) * max_velocity;
-    des_set_velocity(mx, speed);
-    // ROS_INFO("Setting speed to %d", speed);
-    std::cout << "[SET]Setting speed to " << speed << std::endl;
+    // std::cout
+    //     << "button state { "
+    //     << "speed = " << next_state.speed << " }"
+    //     << std::endl;
 
-    //command "read speed"
-    des_reading act_speed;
-    des_read_velocity(mx, false, &act_speed);
-    // ROS_INFO("Velocity read %d", act_speed.real);
-    std::cout << "[READ]Speed read " << act_speed.real << std::endl;
-
-    int incr = 250;
-    if ((joy->buttons[5] == 1) && (joy->buttons[4] == 0) && (act_speed.real < max_velocity - incr)) // inccrease velocity rate
+    if (next_state.enable && !btn_state.enable)
     {
-        if (act_speed.real < incr)
-        {
-            des_set_velocity(mx, max_velocity / 2);
-        }
-        else
-        {
-            des_set_velocity(mx, act_speed.real + incr);
-            ROS_INFO("Inc speed in +%d", incr);
-        }
+        des_enable(mx, true);
     }
 
-    if (joy->buttons[4] == 1 && act_speed.real > incr && joy->buttons[5] == 0) //decrease velocity rate
+    if (next_state.reset && !btn_state.reset)
     {
-        des_set_velocity(mx, act_speed.real - incr);
-        ROS_INFO("Dec speed in -%d", incr);
+        des_reset(mx);
     }
+
+    bool update_speed = false;
+
+    if (next_state.multiplier_increment && !btn_state.multiplier_increment)
+    {
+        car_state.multiplier += car_state.multiplier < multipliers.size();
+        update_speed = true;
+    }
+    if (next_state.multiplier_decrement && !btn_state.multiplier_decrement)
+    {
+        car_state.multiplier -= car_state.multiplier > 0;
+        update_speed = true;
+    }
+
+    if (next_state.speed != btn_state.speed)
+    {
+        car_state.speed = next_state.speed > 0.05 ? next_state.speed : 0.0;
+
+        std::cout << "new speed " << car_state.speed << std::endl;
+        update_speed = true;
+    }
+
+    if (next_state.reverse != btn_state.reverse)
+    {
+        car_state.reversed = next_state.reverse;
+        update_speed = true;
+    }
+
+    if (update_speed)
+    {
+        bool flip = true;
+        bool reversed = car_state.reversed;
+        float normalized_speed = car_state.speed;
+        float multiplier = multipliers[car_state.multiplier];
+
+        std::cout << "normalized_speed = " << normalized_speed << std::endl;
+
+        float speed = (reversed ^ flip ? -1 : 1) * normalized_speed * multiplier;
+
+        ROS_INFO("speed = %d", (short)speed);
+
+        des_set_velocity(mx, (short)speed);
+    }
+
+    btn_state = next_state;
 }
 
 int main(int argc, char **argv)
