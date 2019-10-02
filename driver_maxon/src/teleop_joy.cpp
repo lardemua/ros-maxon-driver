@@ -11,6 +11,8 @@ struct ButtonState
     float speed = 0.0;
     bool reverse = false;
     bool reset = false;
+    bool const_speed_up = false;
+    bool const_speed_dn = false;
     bool multiplier_increment = false;
     bool multiplier_decrement = false;
 };
@@ -37,6 +39,8 @@ ButtonState from_joy(const sensor_msgs::Joy &joy)
     state.multiplier_decrement = joy.buttons[4] == 1;
 
     state.speed = (((-joy.axes[5] + 1.0) / 2.0));
+    state.const_speed_up = joy.buttons[3] == 1;
+    state.const_speed_dn = joy.buttons[0] == 1;
 
     return state;
 }
@@ -79,11 +83,6 @@ void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
 
     const ButtonState next_state = from_joy(*joy);
 
-    // std::cout
-    //     << "button state { "
-    //     << "speed = " << next_state.speed << " }"
-    //     << std::endl;
-
     if (next_state.enable && !btn_state.enable)
     {
         des_enable(mx, true);
@@ -93,9 +92,13 @@ void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
     {
         des_reset(mx);
     }
+    if (next_state.stop_motion && !btn_state.stop_motion)
+    {
+        des_stop_motion(mx);
+        ROS_INFO("motor stopped");
+    }
 
     bool update_speed = false;
-
     if (next_state.multiplier_increment && !btn_state.multiplier_increment)
     {
         car_state.multiplier += car_state.multiplier < multipliers.size();
@@ -118,6 +121,25 @@ void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
     if (next_state.reverse != btn_state.reverse)
     {
         car_state.reversed = next_state.reverse;
+        update_speed = true;
+    }
+    int inc = car_state.multiplier / 4;
+    if (next_state.const_speed_up && !btn_state.const_speed_up)
+    {
+        if (car_state.speed == 0)
+        {
+            car_state.speed = 0.25;
+            update_speed = true;
+        }
+        else
+        {
+            car_state.speed = car_state.speed * 1.25;
+            update_speed = true;
+        }
+    }
+    if (next_state.const_speed_dn && !btn_state.const_speed_dn)
+    {
+        car_state.speed = car_state.speed * 0.75;
         update_speed = true;
     }
 
