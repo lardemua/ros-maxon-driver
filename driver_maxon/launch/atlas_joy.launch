@@ -1,20 +1,15 @@
 <?xml version="1.0"?>
 <launch>
-    
+
     <!-- joy node -->
     <node respawn="true" pkg="joy" type="joy_node" name="turtle_joy">
-    <param name="dev" value="/dev/input/js0"/>
-    <param name="deadzone" value="0.7"/>
-    <param name="autorepeat_rate" value="20"/>
+        <param name="dev" value="/dev/input/js0"/>
+        <param name="deadzone" value="0.7"/>
+        <param name="autorepeat_rate" value="20"/>
     </node>
 
-    <!-- Axes -->
-    <!-- <param name="axis_linear" value="1" type="int"/> -->
-    <!-- <param name="axis_angular" value="0" type="int"/> -->
-    <!-- <param name="scale_linear" value="2" type="double"/> -->
-    <!-- <param name="scale_angular" value="2" type="double"/> -->
-    <node pkg="driver_maxon"  type="teleop_joy" name="teleop_joy" output="screen">
-    <!-- <remap from = "atlasmv/cmd_vel" to = "turtle1/cmd_vel"/> -->
-    </node>
+    <node pkg="driver_maxon" type="teleop_motion" name="teleop_motion" output="screen"/>
+    <node pkg="driver_maxon" type="teleop_main" name="teleop_main" output="screen"/>
+    
 
 </launch>

@@ -1,6 +1,8 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <sensor_msgs/Joy.h>
+#include <std_msgs/Bool.h>
+#include <std_msgs/Float64.h>
 
 #include "mx_des.h"
 
@@ -44,60 +46,66 @@ ButtonState from_joy(const sensor_msgs::Joy &joy)
 
     return state;
 }
-
-class TeleopAtlasMV
+class TeleopMain
 {
 public:
-    TeleopAtlasMV();
+    TeleopMain();
 
 private:
     void joyCallback(const sensor_msgs::Joy::ConstPtr &joy);
     ros::NodeHandle nh_;
-    int linear_, angular_;
-    double l_scale_, a_scale_;
-    ros::Publisher cmd_pub_;
     ros::Subscriber joy_sub_;
+    ros::Publisher enable_pub_;
+    ros::Publisher reset_pub_;
+    ros::Publisher velocity_pub_;
+    ros::Publisher stop_pub_;
 
     des_context *mx;
     ButtonState btn_state;
     CarState car_state;
 };
 
-TeleopAtlasMV::TeleopAtlasMV() : linear_(1), angular_(3), l_scale_(0.025), a_scale_(0.025)
+TeleopMain::TeleopMain()
 {
 
-    mx = des_init((char *)"/dev/ttyUSB1", NULL);
-    if (!mx)
-    {
-        throw std::runtime_error("error initializing des");
-    }
+    // des_reset(mx);
+    //Bool topics:
+    enable_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_enable", 10);
+    reset_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_reset", 10);
+    stop_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_stop", 10);
 
-    des_reset(mx);
+    //Float topics:
+    velocity_pub_ = nh_.advertise<std_msgs::Float64>("teleopmain/cmd_velocity", 10);
+    // steering_pub_ = nh_.advertise<std_msgs::Float64>("teleopmain/cmd_steering", 10);
 
-    cmd_pub_ = nh_.advertise<geometry_msgs::Twist>("atlasmv_commands", 1);
-    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopAtlasMV::joyCallback, this);
+    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopMain::joyCallback, this);
 }
 
-void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
+void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
 {
-
     const ButtonState next_state = from_joy(*joy);
+    std_msgs::Bool enable;
+    std_msgs::Bool reset;
+    std_msgs::Bool stop;
+    std_msgs::Float64 msg_speed;
+    // std_msgs::Float64 steering_lr;
+    // std_msgs::Float64 steering_ud;
 
     if (next_state.enable && !btn_state.enable)
     {
-        des_enable(mx, true);
+        enable.data=next_state.enable;
+        enable_pub_.publish(enable);
     }
-
     if (next_state.reset && !btn_state.reset)
     {
-        des_reset(mx);
+        reset.data=next_state.reset;
+        reset_pub_.publish(reset);
     }
     if (next_state.stop_motion && !btn_state.stop_motion)
     {
-        des_stop_motion(mx);
-        ROS_INFO("motor stopped");
+        stop.data = next_state.stop_motion;
+        stop_pub_.publish(stop);
     }
-
     bool update_speed = false;
     if (next_state.multiplier_increment && !btn_state.multiplier_increment)
     {
@@ -153,18 +161,18 @@ void TeleopAtlasMV::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
         std::cout << "normalized_speed = " << normalized_speed << std::endl;
 
         float speed = (reversed ^ flip ? -1 : 1) * normalized_speed * multiplier;
+        msg_speed.data = speed;
 
-        ROS_INFO("speed = %d", (short)speed);
-
-        des_set_velocity(mx, (short)speed);
+        velocity_pub_.publish(msg_speed);
     }
-
     btn_state = next_state;
 }
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "teleop_atlasMV_node");
-    TeleopAtlasMV teleop_atlas;
+
+    ros::init(argc, argv, "teleop_main_node");
+    TeleopMain teleop_main_atlas;
+
     ros::spin();
 }
