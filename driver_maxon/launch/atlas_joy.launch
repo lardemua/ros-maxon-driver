@@ -8,8 +8,9 @@
         <param name="autorepeat_rate" value="20"/>
     </node>
 
-    <node pkg="driver_maxon" type="teleop_motion" name="teleop_motion" output="screen"/>
     <node pkg="driver_maxon" type="teleop_main" name="teleop_main" output="screen"/>
+    <node pkg="driver_maxon" type="teleop_motion" name="teleop_motion" output="screen"/>
+    <node pkg="driver_maxon" type="teleop_steering" name="teleop_steering" output="screen"/>
     
 
 </launch>

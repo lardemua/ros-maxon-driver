@@ -11,6 +11,7 @@ struct ButtonState
     bool enable = false;
     bool stop_motion = false;
     float speed = 0.0;
+    float steering_lr = 0.0;
     bool reverse = false;
     bool reset = false;
     bool const_speed_up = false;
@@ -41,6 +42,7 @@ ButtonState from_joy(const sensor_msgs::Joy &joy)
     state.multiplier_decrement = joy.buttons[4] == 1;
 
     state.speed = (((-joy.axes[5] + 1.0) / 2.0));
+    state.steering_lr = ((joy.axes[0] + 1) / 2.0);
     state.const_speed_up = joy.buttons[3] == 1;
     state.const_speed_dn = joy.buttons[0] == 1;
 
@@ -59,6 +61,7 @@ private:
     ros::Publisher reset_pub_;
     ros::Publisher velocity_pub_;
     ros::Publisher stop_pub_;
+    ros::Publisher steering_pub_;
 
     des_context *mx;
     ButtonState btn_state;
@@ -70,13 +73,13 @@ TeleopMain::TeleopMain()
 
     // des_reset(mx);
     //Bool topics:
-    enable_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_enable", 10);
-    reset_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_reset", 10);
-    stop_pub_ = nh_.advertise<std_msgs::Bool>("teleopmain/cmd_stop", 10);
+    enable_pub_ = nh_.advertise<std_msgs::Bool>("teleop_node/cmd_enable", 10);
+    reset_pub_ = nh_.advertise<std_msgs::Bool>("teleop_node/cmd_reset", 10);
+    stop_pub_ = nh_.advertise<std_msgs::Bool>("teleop_node/cmd_stop", 10);
 
     //Float topics:
-    velocity_pub_ = nh_.advertise<std_msgs::Float64>("teleopmain/cmd_velocity", 10);
-    // steering_pub_ = nh_.advertise<std_msgs::Float64>("teleopmain/cmd_steering", 10);
+    velocity_pub_ = nh_.advertise<std_msgs::Float64>("teleop_node/cmd_velocity", 10);
+    steering_pub_ = nh_.advertise<std_msgs::Float64>("teleop_node/cmd_steering", 10);
 
     joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopMain::joyCallback, this);
 }
@@ -88,17 +91,16 @@ void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
     std_msgs::Bool reset;
     std_msgs::Bool stop;
     std_msgs::Float64 msg_speed;
-    // std_msgs::Float64 steering_lr;
-    // std_msgs::Float64 steering_ud;
+    std_msgs::Float64 msg_steering;
 
     if (next_state.enable && !btn_state.enable)
     {
-        enable.data=next_state.enable;
+        enable.data = next_state.enable;
         enable_pub_.publish(enable);
     }
     if (next_state.reset && !btn_state.reset)
     {
-        reset.data=next_state.reset;
+        reset.data = next_state.reset;
         reset_pub_.publish(reset);
     }
     if (next_state.stop_motion && !btn_state.stop_motion)
@@ -165,13 +167,18 @@ void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
 
         velocity_pub_.publish(msg_speed);
     }
+
+    float multiplier_steering = 180.0;
+    msg_steering.data = multiplier_steering * next_state.steering_lr;
+    steering_pub_.publish(msg_steering);
+
     btn_state = next_state;
 }
 
 int main(int argc, char **argv)
 {
 
-    ros::init(argc, argv, "teleop_main_node");
+    ros::init(argc, argv, "teleop_node");
     TeleopMain teleop_main_atlas;
 
     ros::spin();
