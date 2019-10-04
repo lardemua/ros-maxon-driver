@@ -28,7 +28,10 @@ TeleopSteering::TeleopSteering()
 
 void TeleopSteering::resetCallback(const std_msgs::Bool::ConstPtr &reset)
 {
+    std_msgs::UInt16 steering_msg;
+    steering_msg.data=90;
     ROS_INFO("steering reset.");
+    steering_pub_.publish(steering_msg);
 }
 
 void TeleopSteering::steeringCallback(const std_msgs::UInt16::ConstPtr &steering)
