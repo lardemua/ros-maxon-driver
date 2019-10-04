@@ -3,7 +3,7 @@
 #include <sensor_msgs/Joy.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
-
+#include <std_msgs/UInt16.h>
 #include "mx_des.h"
 
 struct ButtonState
@@ -79,7 +79,7 @@ TeleopMain::TeleopMain()
 
     //Float topics:
     velocity_pub_ = nh_.advertise<std_msgs::Float64>("teleop_node/cmd_velocity", 10);
-    steering_pub_ = nh_.advertise<std_msgs::Float64>("teleop_node/cmd_steering", 10);
+    steering_pub_ = nh_.advertise<std_msgs::UInt16>("teleop_node/cmd_steering", 10);
 
     joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopMain::joyCallback, this);
 }
@@ -91,7 +91,7 @@ void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
     std_msgs::Bool reset;
     std_msgs::Bool stop;
     std_msgs::Float64 msg_speed;
-    std_msgs::Float64 msg_steering;
+    std_msgs::UInt16 msg_steering;
 
     if (next_state.enable && !btn_state.enable)
     {
@@ -168,10 +168,18 @@ void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
         velocity_pub_.publish(msg_speed);
     }
 
-    float multiplier_steering = 180.0;
+    uint16_t multiplier_steering = 180;
     msg_steering.data = multiplier_steering * next_state.steering_lr;
-    steering_pub_.publish(msg_steering);
+    if (msg_steering.data >= 180)
+    {
+        msg_steering.data = 179;
+    }
+    else if (msg_steering.data <= 0)
+    {
+        msg_steering.data = 1;
+    }
 
+    steering_pub_.publish(msg_steering);
     btn_state = next_state;
 }
 
