@@ -169,14 +169,14 @@ void TeleopMain::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
     }
 
     uint16_t multiplier_steering = 180;
-    msg_steering.data = multiplier_steering * next_state.steering_lr;
-    if (msg_steering.data >= 180)
+    msg_steering.data = (180-(multiplier_steering * next_state.steering_lr));
+    if (msg_steering.data >= 170)
     {
-        msg_steering.data = 179;
+        msg_steering.data = 160;
     }
-    else if (msg_steering.data <= 0)
+    else if (msg_steering.data <= 10)
     {
-        msg_steering.data = 1;
+        msg_steering.data = 20;
     }
 
     steering_pub_.publish(msg_steering);
