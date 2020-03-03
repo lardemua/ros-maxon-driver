@@ -1,4 +1,4 @@
-# ros_maxon_driver
+# ros-maxon-driver
 This is the ROS driver that enables to send commands from a joystick to the MAXON_DES 70/10.   
 
 To launch the node that controls the joy buttons and convert them into messages to the motor:
